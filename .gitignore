@@ -1,0 +1,7 @@
+# Build output
+/sp
+/scratchpad
+/dist/
+
+# OS noise
+.DS_Store
