@@ -69,15 +69,20 @@ func (a *App) trashOne(ctx context.Context, name string, opts trashOptions) erro
 	a.printTrashReport(p, status, opts.force)
 
 	if !opts.yes {
-		question := fmt.Sprintf("Move %s to the trash?", ui.Bold.Render(p.Name))
+		question := fmt.Sprintf("Move %s to the trash?", p.Name)
+		affirmative, negative := "Trash it", "Keep it"
 		if opts.force {
-			question = fmt.Sprintf("%s %s permanently? This cannot be undone.",
-				ui.Danger.Render("Delete"), ui.Bold.Render(p.Name))
+			question = fmt.Sprintf("Delete %s permanently? This cannot be undone.", p.Name)
+			affirmative, negative = "Delete forever", "Cancel"
 		}
-		// Anything with work at risk starts at "no", so a reflexive Enter is
-		// never the destructive answer.
-		ok, err := a.confirm(question, status.Clean() && !opts.force)
+		// Anything with work at risk starts on the safe answer, so a reflexive
+		// Enter is never the destructive one.
+		ok, err := a.confirm(question, affirmative, negative, status.Clean() && !opts.force)
 		if err != nil {
+			if errors.Is(err, ui.ErrCancelled) {
+				a.println(ui.Muted.Render("Cancelled."))
+				return nil
+			}
 			return err
 		}
 		if !ok {

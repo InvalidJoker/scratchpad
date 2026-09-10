@@ -33,6 +33,9 @@ type Config struct {
 	Editor string `toml:"editor"`
 
 	path string
+	// exists records whether the config was read from disk, which is how
+	// first run is detected.
+	exists bool
 }
 
 // Duration is a time.Duration that round-trips through TOML as a string such
@@ -141,10 +144,22 @@ func Load(path string) (*Config, error) {
 	if err := toml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
+	cfg.exists = true
 	return cfg, cfg.normalize()
 }
 
 func (c *Config) Path() string { return c.path }
+
+// Exists reports whether a config file was found on disk. A false value means
+// this is a first run and the values are defaults.
+func (c *Config) Exists() bool { return c.exists }
+
+// SetPath points the config at a different file, so a wizard can write where
+// the user asked rather than where the config happened to be looked for.
+func (c *Config) SetPath(path string) { c.path = path }
+
+// Expand resolves ~ and environment variables in a user-supplied path.
+func Expand(p string) (string, error) { return expand(p) }
 
 // Save writes the config back to disk, creating parent directories.
 func (c *Config) Save() error {
@@ -171,7 +186,11 @@ func (c *Config) Save() error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	return os.Rename(f.Name(), c.path)
+	if err := os.Rename(f.Name(), c.path); err != nil {
+		return err
+	}
+	c.exists = true
+	return nil
 }
 
 func (c *Config) EditorCommand() string {

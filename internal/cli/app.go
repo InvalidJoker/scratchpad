@@ -20,6 +20,10 @@ type App struct {
 	in    io.Reader
 }
 
+// rebuildStore points the store at the current config, after setup has
+// replaced it.
+func (a *App) rebuildStore() { a.store = store.New(a.cfg) }
+
 // interactive reports whether there is a human to prompt. Destructive commands
 // refuse to guess when there is not.
 func (a *App) interactive() bool {

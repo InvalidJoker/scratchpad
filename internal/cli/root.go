@@ -7,12 +7,38 @@ import (
 	"github.com/charmbracelet/colorprofile"
 
 	"github.com/InvalidJoker/scratchpad/internal/config"
-	"github.com/InvalidJoker/scratchpad/internal/store"
 	"github.com/spf13/cobra"
 )
 
 // sprintf is a thin alias so app.go does not need to import fmt.
 func sprintf(format string, args ...any) string { return fmt.Sprintf(format, args...) }
+
+// selfSufficient are the commands that must work before Scratchpad is
+// configured, either because they are the setup itself or because a shell is
+// calling them non-interactively.
+var selfSufficient = map[string]bool{
+	"setup":            true,
+	"init":             true,
+	"help":             true,
+	"completion":       true,
+	"__complete":       true,
+	"__completeNoDesc": true,
+	"bash":             true,
+	"zsh":              true,
+	"fish":             true,
+	"powershell":       true,
+}
+
+// wantsSetup reports whether running the wizard before this command makes
+// sense.
+func wantsSetup(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if selfSufficient[c.Name()] {
+			return false
+		}
+	}
+	return true
+}
 
 // NewRootCommand builds the full command tree. version is stamped at build
 // time and surfaced through `sp --version`.
@@ -37,10 +63,19 @@ func NewRootCommand(version string) *cobra.Command {
 				return err
 			}
 			app.cfg = cfg
-			app.store = store.New(cfg)
+			app.rebuildStore()
 			// Downsample colour to whatever the terminal supports, and strip
 			// it entirely when output is piped to a file or another command.
 			app.out = colorprofile.NewWriter(cmd.OutOrStdout(), os.Environ())
+
+			// A first run gets the wizard, then carries on with whatever the
+			// user actually typed. Non-interactive runs stay silent on
+			// defaults so scripts and CI are never blocked on a prompt.
+			if !cfg.Exists() && app.interactive() && wantsSetup(cmd) {
+				if err := app.runSetup(setupOptions{firstRun: true}); err != nil {
+					return err
+				}
+			}
 			return nil
 		},
 	}
@@ -49,6 +84,7 @@ func NewRootCommand(version string) *cobra.Command {
 		"path to config file (default: OS config dir, or $SCRATCHPAD_CONFIG)")
 
 	root.AddCommand(
+		newSetupCommand(app),
 		newNewCommand(app),
 		newListCommand(app),
 		newOpenCommand(app),

@@ -43,9 +43,9 @@ func (a *App) completeProjects(locs ...store.Location) func(*cobra.Command, []st
 // confirm asks the user to approve a destructive action. When stdin is not a
 // terminal there is nobody to ask, so the action is refused unless it was
 // pre-approved with --yes.
-func (a *App) confirm(question string, def bool) (bool, error) {
+func (a *App) confirm(question, affirmative, negative string, def bool) (bool, error) {
 	if !a.interactive() {
 		return false, errors.New("cannot ask for confirmation without a terminal: re-run with --yes")
 	}
-	return ui.Confirm(a.in, a.out, question, def)
+	return ui.Confirm(question, affirmative, negative, def)
 }
