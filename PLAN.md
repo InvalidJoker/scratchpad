@@ -40,8 +40,8 @@ Config lives at `$XDG_CONFIG_HOME/scratchpad/config.toml` (override with
 | `internal/config` | `config.toml`, path expansion, `30d`/`2w`/`never` durations |
 | `internal/project` | the `Project` model and the lifecycle rules derived from it |
 | `internal/store` | all persistence: create, load, save, list, move between locations |
-| `internal/activity` | *(planned)* activity signals: fs mtime, git, size |
-| `internal/gitx` | the slice of git we need: repo detection, init, status |
+| `internal/activity` | *(planned)* activity signals: fs mtime, git, cached size |
+| `internal/gitx` | the slice of git we need: repo detection, init, status, risk |
 | `internal/scaffold` | starter files for a new project |
 | `internal/ui` | styles + human formatting (`2 hours ago`, `in 14 days`) |
 | `internal/tui` | *(planned)* the bubbletea dashboard |
@@ -64,7 +64,7 @@ Config lives at `$XDG_CONFIG_HOME/scratchpad/config.toml` (override with
 
 ---
 
-## Milestone 1 — Core lifecycle (V1)
+## Milestone 1 — Core lifecycle (V1) ✅
 
 The goal of V1: the full **scratch → decide** loop works from the CLI, and
 nothing can silently destroy work.
@@ -126,8 +126,8 @@ Never destroy work without saying what is about to be lost.
 - [x] `gitx.Read(dir)` — branch, commit count, dirty files, unpushed commits,
       last commit time; ignores Scratchpad's own `.scratchpad/`
 - [x] Pre-delete safety report: uncommitted changes and unpushed commits
-- [ ] Size in the report (a one-off walk at action time is fine — it is not the
-      hot path, and "you are about to free 128 MB" is the point)
+- [x] Size via `store.DirSize`, a one-off walk at action time. Fine here: it is
+      not the hot path, and "you are about to free 128 MB" is the point
 - [x] Confirmation prompt, skippable with `-y/--yes`, defaulting to **no**
       whenever work is at risk. Written by hand rather than with `huh`: huh
       needs lipgloss v1 + `x/ansi` v0.9.3, and MVS resolves `x/ansi` to v0.11.0
@@ -155,34 +155,63 @@ confirmation that names the files at risk.
       open count (size joins once 2.1 lands)
 - [x] `--json`
 
-### 1.7 — `sp clean` — the review loop
+### 1.7 — `sp clean` — the review loop ✅
 
 Cleaning must be a **review**, never a blind `rm -rf`.
 
-- [ ] Find expired + stale projects, sorted by how safe they are to delete
-- [ ] Interactive review: `[Enter] review each · [a] all · [c] cancel`
-- [ ] Per project: `[k] keep · [a] archive · [t] trash · [s] skip`
-- [ ] `--dry-run` (default when not a TTY), `--older-than`, `--yes`
-- [ ] Never auto-select a project with uncommitted git changes
-- [ ] Report reclaimed disk space at the end
+- [x] Find expired + stale projects, with git status and size attached
+- [x] Interactive multi-select review (huh), with safe candidates pre-ticked
+- [x] Confirmation showing how much space comes back
+- [x] `--dry-run`, `--older-than`, `-y/--yes`, `--force`
+- [x] Never auto-select a project with uncommitted changes. Local-only commits
+      do **not** block auto-selection: `clean` moves projects to a recoverable
+      trash, so the gate is unsaved work, not unpushed work
+- [x] Report reclaimed disk space at the end
+- [x] Report and stop when there is no terminal to review in
 
 **Done when:** running `sp clean` on a messy directory feels safe.
 
-### 1.8 — `sp config`
+### 1.8 — `sp config` ✅
 
-- [ ] `sp config` prints the resolved config and where it came from
-- [ ] `sp config set <key> <value>`, `sp config path`, `sp config edit`
-- [ ] `sp init` writes a starter config with comments
+- [x] `sp config` prints the resolved config and where it came from
+- [x] `sp config set <key> <value>`, `get`, `path`, `edit`
+- [x] Values are validated and expanded on the way in; a bad value is rejected
+      whole rather than half-applied
+- [x] Shell completion of setting names
+- [x] `sp setup` writes a starter config (see the setup wizard below)
 
-### 1.9 — Shell integration
+### 1.9 — Shell integration ✅
 
-The repo already has `completions/` and `scripts/` waiting for this.
+The repo already had `completions/` and `scripts/` waiting for this.
 
-- [ ] `sp completion bash|zsh|fish` (cobra) + a `make completions` target
-- [ ] Dynamic completion of project names for `open`/`keep`/`trash`/`info`
-- [ ] `sp shell-init` emitting a `spcd` function, since a child process cannot
+- [x] `sp completion bash|zsh|fish` (cobra) + `make completions`
+- [x] Dynamic completion of project names for `open`/`keep`/`trash`/`info`,
+      scoped per command so `restore` only offers trashed projects
+- [x] `sp shell-init` emitting `spo` and `spn`, since a child process cannot
       change the parent shell's directory
-- [ ] `scripts/build.sh` stamping `version` via `-ldflags`
+- [x] `scripts/build.sh` stamping `version` via `-ldflags`, plus a `Makefile`
+
+### 1.10 — Setup wizard ✅
+
+Not in the original plan; added because a first run should not begin with
+reading documentation.
+
+- [x] `sp setup` (alias `init`): a huh form covering directories, lifespan,
+      staleness, editor and git
+- [x] Runs automatically on first use, then continues with whatever the user
+      actually typed
+- [x] Non-interactive runs stay silent on defaults, so scripts and CI are never
+      blocked on a prompt
+- [x] Editor list is built from what is actually installed
+- [x] Trash follows the scratch directory unless explicitly customised
+- [x] Cancelling writes nothing
+
+### 1.11 — CI ✅
+
+- [x] Build, vet and `go test -race` on Linux, macOS and Windows
+- [x] gofmt check, `go mod tidy` diff check, golangci-lint
+- [x] Cross-compile matrix for linux/darwin/windows on amd64 and arm64
+- [ ] Release automation (goreleaser, Homebrew tap) — see Packaging below
 
 ---
 
@@ -213,8 +242,6 @@ as Active, not Stale.
       `R` rename · `S` search · `?` help · `Q` quit
 - [ ] Detail pane with the git/size/activity block
 - [ ] Confirmation modals reusing the same safety checks as the CLI
-- [ ] Revisit `huh` for prompts once it ships a lipgloss v2 release; until then
-      `ui.Confirm` is the prompt everywhere
 - [ ] Falls back to `sp list` when stdout is not a TTY
 
 ### 2.3 — Search, tags and notes

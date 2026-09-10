@@ -17,11 +17,18 @@ before adding a feature — most of them are already specified there.
 ## Commands
 
 ```bash
-go build ./...                       # build
-go test ./...                        # test
-go vet ./... && gofmt -l internal cmd # lint (gofmt must print nothing)
-go build -o /tmp/sp ./cmd/scratchpad # binary for manual testing
+make build          # build ./sp with the version stamped in
+make test           # go test -race ./...
+make lint           # vet + gofmt check + golangci-lint
+make fmt            # gofmt -w
+make completions    # regenerate completions/
+
+go build -o /tmp/sp ./cmd/scratchpad   # throwaway binary for manual testing
 ```
+
+CI runs the same checks on Linux, macOS and Windows, plus a `go mod tidy`
+diff check and a cross-compile matrix. `golangci-lint` must report zero
+issues.
 
 Manual testing must never touch the real scratch directory. Point the binary at
 a throwaway config:
@@ -68,6 +75,18 @@ These are load-bearing. Breaking one breaks the product, not just a test.
 - **Writes are atomic.** Metadata goes to a temp file then `os.Rename`. A failed
   `Create` removes the directory it made.
 
+## Two levels of risk
+
+`gitx.Status` distinguishes them, and the distinction decides defaults:
+
+- `HasUncommitted()` — unsaved edits, recoverable from nowhere. This gates
+  anything automatic, including `sp clean --yes`.
+- `Clean()` — also false for commits that exist on no remote. Stricter; used
+  for the confirmation default and for permanent deletion.
+
+`sp clean` uses the looser gate because it moves projects to a recoverable
+trash. `sp trash --force` uses the stricter one because it does not.
+
 ## Safety rules
 
 Scratchpad deletes people's work. Every destructive path must:
@@ -97,6 +116,8 @@ Scratchpad deletes people's work. Every destructive path must:
   consistent, and through `app.println` so it can be captured in tests.
 - **Every store operation gets a test** against `t.TempDir()` with an injected
   clock via `store.SetClock`.
+- **Interactive code paths must be gated**, never assumed. `app.interactive()`
+  decides; a command that cannot ask refuses rather than guessing.
 
 ## Dependencies
 
@@ -104,8 +125,19 @@ cobra (commands), fang (CLI presentation), lipgloss v2 (styles), BurntSushi/toml
 (config). fang pulls `charm.land/lipgloss/v2` — use that import path, not
 `github.com/charmbracelet/lipgloss` v1. The two are not compatible.
 
-Planned: bubbletea for the TUI (Milestone 2).
+huh (prompts and the setup wizard) renders with **lipgloss v1**, while fang
+renders with **lipgloss v2**. Both are in the build on purpose and must stay
+that way:
 
-**Do not add `huh`.** It requires lipgloss v1 and `x/ansi` v0.9.3, while fang
-pulls lipgloss v2 and `x/ansi` v0.11.0. MVS resolves to v0.11.0, and lipgloss
-v1's `cellbuf` does not compile against it. `ui.Confirm` covers prompts.
+- `internal/ui/styles.go` uses `charm.land/lipgloss/v2` — everything printed.
+- `internal/ui/theme.go` uses `github.com/charmbracelet/lipgloss` v1 — huh only.
+
+The palette is deliberately duplicated between the two; the colour types are
+incompatible and a conversion layer costs more than eight repeated hex values.
+
+`github.com/charmbracelet/x/cellbuf` is pinned forward to **v0.0.15**. Do not
+let it drift back: lipgloss v1 pulls an older cellbuf that does not compile
+against the `x/ansi` v0.11.0 required by lipgloss v2, and the build breaks with
+errors inside cellbuf itself.
+
+Planned: bubbletea for the TUI (Milestone 2).

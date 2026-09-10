@@ -26,7 +26,49 @@ func Init(ctx context.Context, dir string) error {
 	if IsRepo(dir) {
 		return nil
 	}
-	return run(ctx, dir, "init", "--quiet")
+	if err := run(ctx, dir, "init", "--quiet"); err != nil {
+		return err
+	}
+	return Exclude(dir, MetaDir+"/")
+}
+
+// MetaDir is Scratchpad's per-project bookkeeping directory. It is duplicated
+// from the project package to keep gitx free of upward dependencies.
+const MetaDir = ".scratchpad"
+
+// Exclude adds a pattern to the repository's local exclude file.
+//
+// This is .git/info/exclude rather than .gitignore on purpose: Scratchpad's
+// bookkeeping is not the user's business, so it should not appear in a file
+// they might commit, and its churn should never show up in their history.
+func Exclude(dir, pattern string) error {
+	path := filepath.Join(dir, ".git", "info", "exclude")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+
+	existing, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	for _, line := range strings.Split(string(existing), "\n") {
+		if strings.TrimSpace(line) == pattern {
+			return nil
+		}
+	}
+
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+
+	prefix := ""
+	if len(existing) > 0 && !strings.HasSuffix(string(existing), "\n") {
+		prefix = "\n"
+	}
+	_, err = f.WriteString(prefix + pattern + "\n")
+	return err
 }
 
 // run executes a git command in dir, folding stderr into the returned error.
@@ -60,3 +102,13 @@ func (e *Error) Error() string {
 }
 
 func (e *Error) Unwrap() error { return e.Err }
+
+// CommitAll stages everything and commits it. It is used to give a freshly
+// scaffolded project a clean baseline, so the first file the user writes is
+// the first thing that shows up as uncommitted work.
+func CommitAll(ctx context.Context, dir, message string) error {
+	if err := run(ctx, dir, "add", "-A"); err != nil {
+		return err
+	}
+	return run(ctx, dir, "commit", "--quiet", "-m", message)
+}

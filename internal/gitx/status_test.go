@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/InvalidJoker/scratchpad/internal/gitx"
@@ -173,5 +174,95 @@ func TestUnpushedCommitsAreCounted(t *testing.T) {
 	}
 	if got := status.Summary(); got != "1 unpushed commit" {
 		t.Errorf("Summary = %q, want %q", got, "1 unpushed commit")
+	}
+}
+
+func TestRiskLevels(t *testing.T) {
+	dir := repo(t)
+	run(t, dir, "commit", "--allow-empty", "-m", "first")
+
+	status, err := gitx.Read(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A local-only commit is recoverable from the trash, so it is not
+	// "uncommitted", but it is not fully safe either.
+	if status.HasUncommitted() {
+		t.Error("HasUncommitted = true with a clean tree")
+	}
+	if !status.LocalOnly() {
+		t.Error("LocalOnly = false for a commit that exists on no remote")
+	}
+	if status.Clean() {
+		t.Error("Clean = true for work that exists only locally")
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "wip.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	status, err = gitx.Read(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !status.HasUncommitted() {
+		t.Error("HasUncommitted = false with an untracked file")
+	}
+}
+
+func TestInitExcludesScratchpadMetadata(t *testing.T) {
+	dir := repo(t)
+	if err := os.MkdirAll(filepath.Join(dir, ".scratchpad"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".scratchpad", "metadata.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	status, err := gitx.Read(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(status.Dirty) != 0 {
+		t.Errorf("Dirty = %v, want Scratchpad's metadata excluded by git itself", status.Dirty)
+	}
+}
+
+func TestExcludeIsIdempotent(t *testing.T) {
+	dir := repo(t)
+	for i := 0; i < 3; i++ {
+		if err := gitx.Exclude(dir, "pattern/"); err != nil {
+			t.Fatalf("Exclude: %v", err)
+		}
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".git", "info", "exclude"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(data), "pattern/"); n != 1 {
+		t.Errorf("pattern written %d times, want 1", n)
+	}
+}
+
+func TestCommitAll(t *testing.T) {
+	dir := repo(t)
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := gitx.CommitAll(context.Background(), dir, "Initial scratch"); err != nil {
+		t.Fatalf("CommitAll: %v", err)
+	}
+
+	status, err := gitx.Read(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Commits != 1 {
+		t.Errorf("Commits = %d, want 1", status.Commits)
+	}
+	if status.HasUncommitted() {
+		t.Errorf("Dirty = %v, want a clean tree after committing everything", status.Dirty)
 	}
 }

@@ -25,8 +25,25 @@ type Status struct {
 	LastCommit  time.Time
 }
 
-// Clean reports whether there is no work at risk: nothing uncommitted and
-// nothing unpushed.
+// HasUncommitted reports whether there are unsaved edits — the work that
+// cannot be recovered from anywhere else. This is the gate for actions that
+// move a project to the recoverable trash.
+func (s *Status) HasUncommitted() bool {
+	return s != nil && len(s.Dirty) > 0
+}
+
+// LocalOnly reports whether the project has commits that exist nowhere but
+// this directory. Recoverable from the trash, but gone after a real delete.
+func (s *Status) LocalOnly() bool {
+	if s == nil || s.Commits == 0 {
+		return false
+	}
+	return !s.HasRemote || !s.HasUpstream || s.Unpushed > 0
+}
+
+// Clean reports whether there is no work at risk at all: nothing uncommitted
+// and nothing that exists only here. This is the stricter gate, for permanent
+// deletion.
 func (s *Status) Clean() bool {
 	if s == nil {
 		return true

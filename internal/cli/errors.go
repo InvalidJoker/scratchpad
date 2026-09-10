@@ -16,23 +16,23 @@ import (
 // with: `--ttl` becomes `--Ttl` and "weather-app" becomes "Weather-App".
 func ErrorHandler(w io.Writer, styles fang.Styles, err error) {
 	if f, ok := w.(term.File); ok && !term.IsTerminal(f.Fd()) {
-		fmt.Fprintln(w, err.Error())
+		_, _ = fmt.Fprintln(w, err.Error())
 		return
 	}
 
 	text := styles.ErrorText.UnsetTransform()
-	fmt.Fprintln(w, styles.ErrorHeader.String())
-	fmt.Fprintln(w, text.Render(punctuate(err.Error())))
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, styles.ErrorHeader.String())
+	_, _ = fmt.Fprintln(w, text.Render(punctuate(err.Error())))
+	_, _ = fmt.Fprintln(w)
 
 	if isUsageError(err) {
-		fmt.Fprintln(w, lipgloss.JoinHorizontal(
+		_, _ = fmt.Fprintln(w, lipgloss.JoinHorizontal(
 			lipgloss.Left,
 			text.UnsetWidth().Render("Try"),
 			styles.Program.Flag.Render(" --help "),
 			text.UnsetWidth().UnsetMargins().Render("for usage."),
 		))
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 	}
 }
 

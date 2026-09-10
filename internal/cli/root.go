@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/charmbracelet/colorprofile"
@@ -9,9 +8,6 @@ import (
 	"github.com/InvalidJoker/scratchpad/internal/config"
 	"github.com/spf13/cobra"
 )
-
-// sprintf is a thin alias so app.go does not need to import fmt.
-func sprintf(format string, args ...any) string { return fmt.Sprintf(format, args...) }
 
 // selfSufficient are the commands that must work before Scratchpad is
 // configured, either because they are the setup itself or because a shell is
@@ -92,6 +88,8 @@ func NewRootCommand(version string) *cobra.Command {
 		newKeepCommand(app),
 		newTrashCommand(app),
 		newRestoreCommand(app),
+		newCleanCommand(app),
+		newConfigCommand(app),
 		newShellInitCommand(app),
 	)
 	return root

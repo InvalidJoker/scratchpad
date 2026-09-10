@@ -180,7 +180,7 @@ func (c *Config) Save() error {
 	defer os.Remove(f.Name())
 
 	if err := toml.NewEncoder(f).Encode(c); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 	if err := f.Close(); err != nil {

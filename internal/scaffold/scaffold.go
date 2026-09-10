@@ -33,6 +33,11 @@ func Apply(ctx context.Context, p *project.Project, opts Options) error {
 		if err := gitx.Init(ctx, p.Dir()); err != nil {
 			return err
 		}
+		// Commit the scaffold so the project starts from a clean baseline.
+		// This needs a git identity, and plenty of machines do not have one
+		// configured; that is not worth failing or warning about, so a failure
+		// just leaves the files staged for the user.
+		_ = gitx.CommitAll(ctx, p.Dir(), "Initial scratch")
 	}
 	return nil
 }
@@ -58,7 +63,7 @@ func writeIfAbsent(path, content string) error {
 		}
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	_, err = f.WriteString(content)
 	return err
 }

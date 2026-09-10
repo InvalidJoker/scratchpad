@@ -140,3 +140,27 @@ func Tildify(path string) string {
 	}
 	return path
 }
+
+// Bytes renders a byte count the way a disk usage tool would: "128 MB".
+func Bytes(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for size := n / unit; size >= unit; size /= unit {
+		div *= unit
+		exp++
+	}
+	value := float64(n) / float64(div)
+	// One decimal place below 10 keeps "1.4 GB" from collapsing into "1 GB".
+	if value < 10 {
+		return fmt.Sprintf("%.1f %cB", value, "KMGTPE"[exp])
+	}
+	return fmt.Sprintf("%.0f %cB", value, "KMGTPE"[exp])
+}
+
+// KeyValue renders a settings line, aligned wider than Field for config keys.
+func KeyValue(key, value string) string {
+	return Muted.Width(22).Render(key) + value
+}
