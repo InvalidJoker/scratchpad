@@ -16,6 +16,16 @@ import (
 // clobber something.
 var ErrOccupied = errors.New("destination already exists")
 
+// OccupiedError carries the path that was in the way, so callers can name it
+// without parsing the message.
+type OccupiedError struct {
+	Path string
+}
+
+func (e *OccupiedError) Error() string { return ErrOccupied.Error() + ": " + e.Path }
+
+func (e *OccupiedError) Is(target error) bool { return target == ErrOccupied }
+
 // Keep promotes a project into the permanent projects directory. dest
 // overrides the configured parent directory when it is non-empty.
 func (s *Store) Keep(p *project.Project, dest string) error {
@@ -72,7 +82,7 @@ func (s *Store) Restore(p *project.Project) error {
 		target = s.PathFor(Scratch, originalName(p))
 	}
 	if exists(target) {
-		return fmt.Errorf("%w: %s", ErrOccupied, target)
+		return &OccupiedError{Path: target}
 	}
 
 	origin := p.Dir()
@@ -110,7 +120,7 @@ func (s *Store) relocate(p *project.Project, target string) error {
 		return fmt.Errorf("project %q has no directory", p.Name)
 	}
 	if exists(target) {
-		return fmt.Errorf("%w: %s", ErrOccupied, target)
+		return &OccupiedError{Path: target}
 	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return fmt.Errorf("create %s: %w", filepath.Dir(target), err)
@@ -152,7 +162,7 @@ func (s *Store) freeTrashPath(name string) (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("%w: %s", ErrOccupied, base)
+	return "", &OccupiedError{Path: base}
 }
 
 // originalName recovers the pre-trash name, which differs from the directory

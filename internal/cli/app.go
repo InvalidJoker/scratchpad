@@ -3,6 +3,9 @@ package cli
 
 import (
 	"io"
+	"os"
+
+	"github.com/charmbracelet/x/term"
 
 	"github.com/InvalidJoker/scratchpad/internal/config"
 	"github.com/InvalidJoker/scratchpad/internal/store"
@@ -14,6 +17,19 @@ type App struct {
 	cfg   *config.Config
 	store *store.Store
 	out   io.Writer
+	in    io.Reader
+}
+
+// interactive reports whether there is a human to prompt. Destructive commands
+// refuse to guess when there is not.
+func (a *App) interactive() bool {
+	f, ok := a.in.(term.File)
+	return ok && term.IsTerminal(f.Fd())
+}
+
+// stdio returns the streams to hand to a child process such as an editor.
+func (a *App) stdio() (io.Reader, io.Writer, io.Writer) {
+	return os.Stdin, os.Stdout, os.Stderr
 }
 
 func (a *App) Config() *config.Config { return a.cfg }
