@@ -17,7 +17,7 @@ func sprintf(format string, args ...any) string { return fmt.Sprintf(format, arg
 // NewRootCommand builds the full command tree. version is stamped at build
 // time and surfaced through `sp --version`.
 func NewRootCommand(version string) *cobra.Command {
-	app := &App{out: os.Stdout}
+	app := &App{out: os.Stdout, in: os.Stdin}
 	var configPath string
 
 	root := &cobra.Command{
