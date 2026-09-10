@@ -69,21 +69,122 @@ Config lives at `$XDG_CONFIG_HOME/scratchpad/config.toml` (override with
 The goal of V1: the full **scratch → decide** loop works from the CLI, and
 nothing can silently destroy work.
 
-### 1.1 — `sp list`
+V1 derives staleness from Scratchpad's own metadata — `created` and
+`last_opened`. That is a known limitation: edit a project in your editor without
+going through `sp` and it will drift toward Stale anyway. Fixing that is 2.1,
+and nothing in this milestone is blocked on it, because every command reads
+activity through `project.LastActivity()` and will pick up better signals for
+free once they exist.
+
+### 1.1 — `sp list` ✅
 
 The command you will run most.
 
-- [ ] `store.List` across locations, with a `Filter` (state, tag, age, query)
-- [ ] Table output: `NAME  LAST USED  AGE  SIZE  STATUS`
-- [ ] Flags: `--all`, `--stale`, `--expired`, `--kept`, `--trashed`,
-      `--tag <t>`, `--older-than 30d`, `--sort name|age|used|size`
-- [ ] `--json` for scripting, plain output when stdout is not a TTY
-- [ ] Empty state that teaches the next command (`sp new <name>`)
+- [x] `store.Query` with a `Filter` (status, tag, text, idle time) across locations
+- [x] Table output: `NAME  LAST USED  AGE  STATUS`, aligned by display width
+- [x] Flags: `--all`, `--active`, `--stale`, `--expired`, `--kept`, `--trashed`,
+      `--tag`, `--query`, `--older-than 30d`, `--sort used|name|age`, `--reverse`
+- [x] `--json` with a stable wire shape, `-q/--quiet` for piping to xargs
+- [x] Colour stripped automatically when stdout is not a TTY (colorprofile)
+- [x] Empty state that teaches the next command (`sp new <name>`)
+- [ ] `SIZE` column and `--sort size` — deferred to 2.1, since it needs the
+      cached scan; walking every project tree on the hot path is exactly what
+      the performance rule below forbids
 
 **Done when:** `sp list` on an empty scratch dir is helpful rather than blank,
 and on 50 projects it is still instant.
 
-### 1.2 — `internal/activity`: real staleness signals
+### 1.2 — `sp open`
+
+- [ ] Resolve the project, `Touch()` it (bumps `last_opened`, `open_count`)
+- [ ] Launch `$SCRATCHPAD_EDITOR` → `config.editor` → `$VISUAL` → `$EDITOR`
+- [ ] `--print-path` for shell integration; `--reveal` for the file manager
+- [ ] Fuzzy name matching: `sp open weath` finds `weather-app`, and prompts
+      when a prefix is ambiguous
+
+**Done when:** `open_count` becomes a real signal for "possible keeper".
+
+### 1.3 — `sp keep` — the promote path
+
+The feature the whole product hangs on. Moving out of scratch must be one word.
+
+- [ ] `store.Move(p, Kept)` — cross-device-safe move (rename, fall back to copy)
+- [ ] Clear `expires_at`, set `state: kept`, record `original_path`
+- [ ] `--to <dir>` to override the destination for one project
+- [ ] Refuse to clobber an existing directory in `projects_dir`
+- [ ] Print the new path so the user can `cd` to it
+
+**Done when:** `sp keep awesome-app` moves it to `~/Projects/awesome-app` and
+the project stops appearing in scratch listings.
+
+### 1.4 — `sp trash` — with git safety
+
+Never destroy work without saying what is about to be lost.
+
+- [ ] `gitx.Status(dir)` — branch, commit count, dirty files, unpushed commits
+- [ ] Pre-delete safety report: uncommitted changes, unpushed commits, and size
+      (a one-off walk at action time is fine here — it is not the hot path,
+      and "you are about to free 128 MB" is the point)
+- [ ] Confirmation prompt (`huh`), skippable with `-y/--yes`
+- [ ] Move to `trash_dir`, set `state: trashed`, stamp `trashed_at` and
+      `original_path`
+- [ ] Name collisions in trash get a timestamp suffix
+- [ ] `--force` for the genuine "delete it right now" case
+
+**Done when:** trashing a project with uncommitted changes requires an explicit
+confirmation that names the files at risk.
+
+### 1.5 — `sp restore`
+
+- [ ] Restore to `original_path`, or to scratch if that is occupied
+- [ ] Reset `state` to `active` and grant a fresh expiry window
+- [ ] `sp restore --list` to browse the trash
+
+**Done when:** `sp restore old-website` undoes a mistaken trash completely.
+
+### 1.6 — `sp info`
+
+- [ ] Full detail: description, note, tags, git block, age, activity, expiry,
+      open count (size joins once 2.1 lands)
+- [ ] `--json`
+
+### 1.7 — `sp clean` — the review loop
+
+Cleaning must be a **review**, never a blind `rm -rf`.
+
+- [ ] Find expired + stale projects, sorted by how safe they are to delete
+- [ ] Interactive review: `[Enter] review each · [a] all · [c] cancel`
+- [ ] Per project: `[k] keep · [a] archive · [t] trash · [s] skip`
+- [ ] `--dry-run` (default when not a TTY), `--older-than`, `--yes`
+- [ ] Never auto-select a project with uncommitted git changes
+- [ ] Report reclaimed disk space at the end
+
+**Done when:** running `sp clean` on a messy directory feels safe.
+
+### 1.8 — `sp config`
+
+- [ ] `sp config` prints the resolved config and where it came from
+- [ ] `sp config set <key> <value>`, `sp config path`, `sp config edit`
+- [ ] `sp init` writes a starter config with comments
+
+### 1.9 — Shell integration
+
+The repo already has `completions/` and `scripts/` waiting for this.
+
+- [ ] `sp completion bash|zsh|fish` (cobra) + a `make completions` target
+- [ ] Dynamic completion of project names for `open`/`keep`/`trash`/`info`
+- [ ] `sp shell-init` emitting a `spcd` function, since a child process cannot
+      change the parent shell's directory
+- [ ] `scripts/build.sh` stamping `version` via `-ldflags`
+
+---
+
+## Milestone 2 — Make it truthful and fast to live in (V2)
+
+V1 trusts its own metadata. V2 starts by making staleness reflect what you
+actually did, then makes the whole thing pleasant to live in.
+
+### 2.1 — `internal/activity`: real staleness signals
 
 Metadata timestamps alone lie — you edit files without going through `sp`.
 
@@ -98,92 +199,7 @@ Metadata timestamps alone lie — you edit files without going through `sp`.
 **Done when:** a project you edited in your editor (never through `sp`) reads
 as Active, not Stale.
 
-### 1.3 — `sp open`
-
-- [ ] Resolve the project, `Touch()` it (bumps `last_opened`, `open_count`)
-- [ ] Launch `$SCRATCHPAD_EDITOR` → `config.editor` → `$VISUAL` → `$EDITOR`
-- [ ] `--print-path` for shell integration; `--reveal` for the file manager
-- [ ] Fuzzy name matching: `sp open weath` finds `weather-app`, and prompts
-      when a prefix is ambiguous
-
-**Done when:** `open_count` becomes a real signal for "possible keeper".
-
-### 1.4 — `sp keep` — the promote path
-
-The feature the whole product hangs on. Moving out of scratch must be one word.
-
-- [ ] `store.Move(p, Kept)` — cross-device-safe move (rename, fall back to copy)
-- [ ] Clear `expires_at`, set `state: kept`, record `original_path`
-- [ ] `--to <dir>` to override the destination for one project
-- [ ] Refuse to clobber an existing directory in `projects_dir`
-- [ ] Print the new path so the user can `cd` to it
-
-**Done when:** `sp keep awesome-app` moves it to `~/Projects/awesome-app` and
-the project stops appearing in scratch listings.
-
-### 1.5 — `sp trash` — with git safety
-
-Never destroy work without saying what is about to be lost.
-
-- [ ] `gitx.Status(dir)` — branch, commit count, dirty files, unpushed commits
-- [ ] Pre-delete safety report: uncommitted changes, unpushed commits, size
-- [ ] Confirmation prompt (`huh`), skippable with `-y/--yes`
-- [ ] Move to `trash_dir`, set `state: trashed`, stamp `trashed_at` and
-      `original_path`
-- [ ] Name collisions in trash get a timestamp suffix
-- [ ] `--force` for the genuine "delete it right now" case
-
-**Done when:** trashing a project with uncommitted changes requires an explicit
-confirmation that names the files at risk.
-
-### 1.6 — `sp restore`
-
-- [ ] Restore to `original_path`, or to scratch if that is occupied
-- [ ] Reset `state` to `active` and grant a fresh expiry window
-- [ ] `sp restore --list` to browse the trash
-
-**Done when:** `sp restore old-website` undoes a mistaken trash completely.
-
-### 1.7 — `sp info`
-
-- [ ] Full detail: description, note, tags, git block, size, age, activity,
-      expiry, open count
-- [ ] `--json`
-
-### 1.8 — `sp clean` — the review loop
-
-Cleaning must be a **review**, never a blind `rm -rf`.
-
-- [ ] Find expired + stale projects, sorted by how safe they are to delete
-- [ ] Interactive review: `[Enter] review each · [a] all · [c] cancel`
-- [ ] Per project: `[k] keep · [a] archive · [t] trash · [s] skip`
-- [ ] `--dry-run` (default when not a TTY), `--older-than`, `--yes`
-- [ ] Never auto-select a project with uncommitted git changes
-- [ ] Report reclaimed disk space at the end
-
-**Done when:** running `sp clean` on a messy directory feels safe.
-
-### 1.9 — `sp config`
-
-- [ ] `sp config` prints the resolved config and where it came from
-- [ ] `sp config set <key> <value>`, `sp config path`, `sp config edit`
-- [ ] `sp init` writes a starter config with comments
-
-### 1.10 — Shell integration
-
-The repo already has `completions/` and `scripts/` waiting for this.
-
-- [ ] `sp completion bash|zsh|fish` (cobra) + a `make completions` target
-- [ ] Dynamic completion of project names for `open`/`keep`/`trash`/`info`
-- [ ] `sp shell-init` emitting a `spcd` function, since a child process cannot
-      change the parent shell's directory
-- [ ] `scripts/build.sh` stamping `version` via `-ldflags`
-
----
-
-## Milestone 2 — Make it fast to live in (V2)
-
-### 2.1 — `sp` with no arguments: the TUI
+### 2.2 — `sp` with no arguments: the TUI
 
 - [ ] Bubbletea dashboard: counts, project list, status column
 - [ ] Keys: `Enter` open · `N` new · `K` keep · `A` archive · `D` trash ·
@@ -192,14 +208,14 @@ The repo already has `completions/` and `scripts/` waiting for this.
 - [ ] Confirmation modals reusing the same safety checks as the CLI
 - [ ] Falls back to `sp list` when stdout is not a TTY
 
-### 2.2 — Search, tags and notes
+### 2.3 — Search, tags and notes
 
 - [ ] `sp search <query>` over name, description, note and tags
 - [ ] `sp tag <name> [+tag] [-tag]`
 - [ ] `sp note <name>` opening `$EDITOR` on the note field
 - [ ] `sp rename <old> <new>`
 
-### 2.3 — `sp archive`
+### 2.4 — `sp archive`
 
 The middle option between keeping and deleting.
 
@@ -208,7 +224,7 @@ The middle option between keeping and deleting.
 - [ ] `sp archive --list`, `sp unarchive <name>`
 - [ ] Report the compression ratio — it is the reward for archiving
 
-### 2.4 — Disk awareness
+### 2.5 — Disk awareness
 
 - [ ] `sp stats` — total size, per-project, biggest offenders, reclaimable
 - [ ] Flag `node_modules`-style directories as separately reclaimable

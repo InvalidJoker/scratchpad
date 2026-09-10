@@ -32,6 +32,7 @@ var (
 	Danger  = lipgloss.NewStyle().Foreground(colorErr)
 	Bold    = lipgloss.NewStyle().Bold(true)
 	Label   = lipgloss.NewStyle().Foreground(colorMuted).Width(12)
+	Header  = lipgloss.NewStyle().Foreground(colorMuted).Bold(true)
 )
 
 // Check renders a success line, e.g. "✓ Created weather-app".

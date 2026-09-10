@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/colorprofile"
+
 	"github.com/InvalidJoker/scratchpad/internal/config"
 	"github.com/InvalidJoker/scratchpad/internal/store"
 	"github.com/spf13/cobra"
@@ -36,7 +38,9 @@ func NewRootCommand(version string) *cobra.Command {
 			}
 			app.cfg = cfg
 			app.store = store.New(cfg)
-			app.out = cmd.OutOrStdout()
+			// Downsample colour to whatever the terminal supports, and strip
+			// it entirely when output is piped to a file or another command.
+			app.out = colorprofile.NewWriter(cmd.OutOrStdout(), os.Environ())
 			return nil
 		},
 	}
@@ -46,6 +50,7 @@ func NewRootCommand(version string) *cobra.Command {
 
 	root.AddCommand(
 		newNewCommand(app),
+		newListCommand(app),
 	)
 	return root
 }
