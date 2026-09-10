@@ -92,6 +92,7 @@ func NewRootCommand(version string) *cobra.Command {
 		newKeepCommand(app),
 		newTrashCommand(app),
 		newRestoreCommand(app),
+		newShellInitCommand(app),
 	)
 	return root
 }
