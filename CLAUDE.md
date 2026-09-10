@@ -74,8 +74,11 @@ Scratchpad deletes people's work. Every destructive path must:
 
 1. Move to trash rather than delete, unless `--force`.
 2. Check `gitx` for uncommitted or unpushed work and require explicit
-   confirmation when it finds any.
-3. Default to `--dry-run` when stdout is not a TTY.
+   confirmation when it finds any. Commits that exist on no remote count as
+   work at risk, not just uncommitted files.
+3. Refuse to act when stdin is not a TTY and the action was not pre-approved
+   with `--yes`. Never assume consent you could not ask for.
+4. Never `os.RemoveAll` a directory without a `.scratchpad/` inside it.
 
 ## Conventions
 
@@ -101,4 +104,8 @@ cobra (commands), fang (CLI presentation), lipgloss v2 (styles), BurntSushi/toml
 (config). fang pulls `charm.land/lipgloss/v2` — use that import path, not
 `github.com/charmbracelet/lipgloss` v1. The two are not compatible.
 
-Planned: bubbletea and huh for the TUI and prompts (Milestone 2).
+Planned: bubbletea for the TUI (Milestone 2).
+
+**Do not add `huh`.** It requires lipgloss v1 and `x/ansi` v0.9.3, while fang
+pulls lipgloss v2 and `x/ansi` v0.11.0. MVS resolves to v0.11.0, and lipgloss
+v1's `cellbuf` does not compile against it. `ui.Confirm` covers prompts.

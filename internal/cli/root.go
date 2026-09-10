@@ -51,6 +51,11 @@ func NewRootCommand(version string) *cobra.Command {
 	root.AddCommand(
 		newNewCommand(app),
 		newListCommand(app),
+		newOpenCommand(app),
+		newInfoCommand(app),
+		newKeepCommand(app),
+		newTrashCommand(app),
+		newRestoreCommand(app),
 	)
 	return root
 }

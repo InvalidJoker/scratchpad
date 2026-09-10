@@ -92,8 +92,8 @@ func Read(ctx context.Context, dir string) (*Status, error) {
 	}
 	if out, err := output(ctx, dir, "status", "--porcelain"); err == nil {
 		for _, line := range strings.Split(out, "\n") {
-			if line = strings.TrimSpace(line); line != "" {
-				s.Dirty = append(s.Dirty, line)
+			if entry := parsePorcelain(line); entry != "" {
+				s.Dirty = append(s.Dirty, entry)
 			}
 		}
 	}
@@ -127,6 +127,29 @@ func LastCommit(ctx context.Context, dir string) time.Time {
 		return time.Time{}
 	}
 	return t
+}
+
+// metaPrefix is Scratchpad's own directory. It shows up as untracked in every
+// project we create, and reporting our bookkeeping as the user's work at risk
+// would cry wolf on every single delete.
+const metaPrefix = ".scratchpad/"
+
+// parsePorcelain turns one `git status --porcelain` line into a display entry,
+// or "" for lines that do not represent work at risk.
+func parsePorcelain(line string) string {
+	if len(line) < 4 {
+		return ""
+	}
+	code, path := strings.TrimSpace(line[:2]), line[3:]
+	// A rename reads "old -> new"; the new path is the one that matters.
+	if i := strings.Index(path, " -> "); i >= 0 {
+		path = path[i+4:]
+	}
+	path = strings.Trim(path, `"`)
+	if path == strings.TrimSuffix(metaPrefix, "/") || strings.HasPrefix(path, metaPrefix) {
+		return ""
+	}
+	return code + " " + path
 }
 
 func output(ctx context.Context, dir string, args ...string) (string, error) {

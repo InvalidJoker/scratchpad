@@ -94,59 +94,66 @@ The command you will run most.
 **Done when:** `sp list` on an empty scratch dir is helpful rather than blank,
 and on 50 projects it is still instant.
 
-### 1.2 — `sp open`
+### 1.2 — `sp open` ✅
 
-- [ ] Resolve the project, `Touch()` it (bumps `last_opened`, `open_count`)
-- [ ] Launch `$SCRATCHPAD_EDITOR` → `config.editor` → `$VISUAL` → `$EDITOR`
-- [ ] `--print-path` for shell integration; `--reveal` for the file manager
-- [ ] Fuzzy name matching: `sp open weath` finds `weather-app`, and prompts
-      when a prefix is ambiguous
+- [x] Resolve the project, `Touch()` it (bumps `last_opened`, `open_count`)
+- [x] Launch `config.editor` → `$VISUAL` → `$EDITOR`, with a clear message when none is set
+- [x] `-p/--print-path` for shell integration; `--reveal` for the file manager; `--no-editor`
+- [x] Name matching in `store.Resolve`: exact, then prefix, then substring.
+      Ambiguity is an error listing the candidates — guessing is not worth the
+      risk when the next command may delete something
 
 **Done when:** `open_count` becomes a real signal for "possible keeper".
 
-### 1.3 — `sp keep` — the promote path
+### 1.3 — `sp keep` — the promote path ✅
 
 The feature the whole product hangs on. Moving out of scratch must be one word.
 
-- [ ] `store.Move(p, Kept)` — cross-device-safe move (rename, fall back to copy)
-- [ ] Clear `expires_at`, set `state: kept`, record `original_path`
-- [ ] `--to <dir>` to override the destination for one project
-- [ ] Refuse to clobber an existing directory in `projects_dir`
-- [ ] Print the new path so the user can `cd` to it
+- [x] `store.Keep` — cross-device-safe move (rename, fall back to copy),
+      preserving symlinks and modification times
+- [x] Clear `expires_at`, set `state: kept`, record `original_path`
+- [x] `--to <dir>` to override the destination parent for one project
+- [x] Refuse to clobber an existing directory; `OccupiedError` names the path
+- [x] Print the new path so the user can `cd` to it
 
 **Done when:** `sp keep awesome-app` moves it to `~/Projects/awesome-app` and
 the project stops appearing in scratch listings.
 
-### 1.4 — `sp trash` — with git safety
+### 1.4 — `sp trash` — with git safety ✅
 
 Never destroy work without saying what is about to be lost.
 
-- [ ] `gitx.Status(dir)` — branch, commit count, dirty files, unpushed commits
-- [ ] Pre-delete safety report: uncommitted changes, unpushed commits, and size
-      (a one-off walk at action time is fine here — it is not the hot path,
-      and "you are about to free 128 MB" is the point)
-- [ ] Confirmation prompt (`huh`), skippable with `-y/--yes`
-- [ ] Move to `trash_dir`, set `state: trashed`, stamp `trashed_at` and
+- [x] `gitx.Read(dir)` — branch, commit count, dirty files, unpushed commits,
+      last commit time; ignores Scratchpad's own `.scratchpad/`
+- [x] Pre-delete safety report: uncommitted changes and unpushed commits
+- [ ] Size in the report (a one-off walk at action time is fine — it is not the
+      hot path, and "you are about to free 128 MB" is the point)
+- [x] Confirmation prompt, skippable with `-y/--yes`, defaulting to **no**
+      whenever work is at risk. Written by hand rather than with `huh`: huh
+      needs lipgloss v1 + `x/ansi` v0.9.3, and MVS resolves `x/ansi` to v0.11.0
+      for lipgloss v2, which does not compile
+- [x] Move to `trash_dir`, set `state: trashed`, stamp `trashed_at` and
       `original_path`
-- [ ] Name collisions in trash get a timestamp suffix
-- [ ] `--force` for the genuine "delete it right now" case
+- [x] Name collisions in trash get a timestamp suffix
+- [x] `--force` for the genuine "delete it right now" case, refusing any
+      directory without a `.scratchpad/` so a bad path cannot become `rm -rf`
 
 **Done when:** trashing a project with uncommitted changes requires an explicit
 confirmation that names the files at risk.
 
-### 1.5 — `sp restore`
+### 1.5 — `sp restore` ✅
 
-- [ ] Restore to `original_path`, or to scratch if that is occupied
-- [ ] Reset `state` to `active` and grant a fresh expiry window
-- [ ] `sp restore --list` to browse the trash
+- [x] Restore to `original_path`, or to scratch if that is occupied
+- [x] Reset `state` to `active` and grant a fresh expiry window
+- [x] `sp restore --list` (and bare `sp restore`) to browse the trash
 
 **Done when:** `sp restore old-website` undoes a mistaken trash completely.
 
-### 1.6 — `sp info`
+### 1.6 — `sp info` ✅
 
-- [ ] Full detail: description, note, tags, git block, age, activity, expiry,
+- [x] Full detail: description, note, tags, git block, age, activity, expiry,
       open count (size joins once 2.1 lands)
-- [ ] `--json`
+- [x] `--json`
 
 ### 1.7 — `sp clean` — the review loop
 
@@ -206,6 +213,8 @@ as Active, not Stale.
       `R` rename · `S` search · `?` help · `Q` quit
 - [ ] Detail pane with the git/size/activity block
 - [ ] Confirmation modals reusing the same safety checks as the CLI
+- [ ] Revisit `huh` for prompts once it ships a lipgloss v2 release; until then
+      `ui.Confirm` is the prompt everywhere
 - [ ] Falls back to `sp list` when stdout is not a TTY
 
 ### 2.3 — Search, tags and notes
