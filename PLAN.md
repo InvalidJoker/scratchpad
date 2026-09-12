@@ -184,7 +184,8 @@ Cleaning must be a **review**, never a blind `rm -rf`.
 
 The repo already had `completions/` and `scripts/` waiting for this.
 
-- [x] `sp completion bash|zsh|fish` (cobra) + `make completions`
+- [x] `sp completion bash|zsh|fish` (cobra), generated at release time rather
+      than committed
 - [x] Dynamic completion of project names for `open`/`keep`/`trash`/`info`,
       scoped per command so `restore` only offers trashed projects
 - [x] `sp shell-init` emitting `spo` and `spn`, since a child process cannot
@@ -211,7 +212,11 @@ reading documentation.
 - [x] Build, vet and `go test -race` on Linux, macOS and Windows
 - [x] gofmt check, `go mod tidy` diff check, golangci-lint
 - [x] Cross-compile matrix for linux/darwin/windows on amd64 and arm64
-- [ ] Release automation (goreleaser, Homebrew tap) — see Packaging below
+- [x] Release automation: `.goreleaser.yaml` plus a tag-triggered workflow, and
+      `goreleaser check` in CI so the config cannot rot between releases
+- [x] `scripts/install.sh` — checksum-verified download, completions for every
+      shell found, and the `shell-init` block added to the user's profile
+- [ ] Homebrew tap — see Packaging below
 
 ---
 
@@ -307,7 +312,9 @@ with an injected clock. CLI commands get golden-output tests with colour off.
 **Performance** — `sp list` must stay instant. Scan concurrently, cache derived
 signals, and never walk a project tree on the hot path.
 
-**Packaging** — goreleaser, Homebrew tap, `go install`, checksummed binaries.
+**Packaging** — goreleaser builds checksummed archives for linux/darwin/windows
+on amd64 and arm64, each carrying the completions for that release. Still open:
+a Homebrew tap (`brews:` in `.goreleaser.yaml`, once the tap repo exists).
 
 ---
 

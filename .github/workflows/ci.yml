@@ -74,6 +74,12 @@ jobs:
         with:
           version: latest
 
+      # A release config that only breaks at tag time breaks the release.
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: check
+
   build:
     name: cross-compile
     runs-on: ubuntu-latest

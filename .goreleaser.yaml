@@ -1,0 +1,67 @@
+# Release configuration for Scratchpad. Validate with `goreleaser check`.
+version: 2
+
+project_name: scratchpad
+
+before:
+  hooks:
+    - go mod tidy
+    # Completions are generated at release time rather than committed, so they
+    # can never drift from the command tree they describe.
+    - mkdir -p completions
+    - sh -c 'go run ./cmd/scratchpad completion bash > completions/sp.bash'
+    - sh -c 'go run ./cmd/scratchpad completion zsh  > completions/sp.zsh'
+    - sh -c 'go run ./cmd/scratchpad completion fish > completions/sp.fish'
+
+builds:
+  - id: sp
+    main: ./cmd/scratchpad
+    binary: sp
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .FullCommit }}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    # Reproducible archives: without this every build stamps "now".
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: sp
+    ids: [sp]
+    # scripts/install.sh builds this name from uname output; keep it stable.
+    name_template: "sp_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - completions/sp.*
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^chore"
+      - "^docs"
+      - "^test"
+      - "^ci"
+      - Merge pull request
+      - Merge branch
+
+release:
+  footer: |
+    ## Install
+
+    ```sh
+    curl -fsSL https://raw.githubusercontent.com/InvalidJoker/scratchpad/main/scripts/install.sh | sh
+    ```

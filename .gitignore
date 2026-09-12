@@ -2,6 +2,8 @@
 /sp
 /scratchpad
 /dist/
+# Generated at release time by goreleaser, never committed.
+/completions/
 
 # OS noise
 .DS_Store

@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt completions install clean
+.PHONY: build test lint fmt install snapshot clean
 
 build:
 	@./scripts/build.sh
@@ -14,11 +14,13 @@ lint:
 fmt:
 	gofmt -w internal cmd
 
-completions:
-	@./scripts/completions.sh
-
 install:
 	go install -trimpath -ldflags "-s -w -X main.version=$$(git describe --tags --always --dirty 2>/dev/null || echo dev)" ./cmd/scratchpad
 
+# Build the full set of release artefacts locally, without tagging or publishing.
+snapshot:
+	goreleaser release --snapshot --clean
+
 clean:
 	rm -f ./sp
+	rm -rf ./dist ./completions
