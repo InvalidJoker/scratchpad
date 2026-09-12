@@ -80,6 +80,7 @@ func NewRootCommand(version string) *cobra.Command {
 	root.PersistentFlags().StringVar(&configPath, "config", "",
 		"path to config file (default: OS config dir, or $SCRATCHPAD_CONFIG)")
 
+	root.CompletionOptions.HiddenDefaultCmd = true
 	root.AddCommand(
 		newSetupCommand(app),
 		newNewCommand(app),

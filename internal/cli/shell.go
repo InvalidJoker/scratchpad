@@ -12,8 +12,9 @@ import (
 
 func newShellInitCommand(app *App) *cobra.Command {
 	return &cobra.Command{
-		Use:       "shell-init [bash|zsh|fish|powershell]",
-		Short:     "Print shell functions that can change your directory",
+		Use:   "shell-init [bash|zsh|fish|powershell]",
+		Short: "Print shell functions that can change your directory",
+		Hidden:    true,
 		ValidArgs: []string{"bash", "zsh", "fish", "powershell"},
 		Args:      cobra.MaximumNArgs(1),
 		Long: "Print shell functions to evaluate in your shell profile.\n\n" +

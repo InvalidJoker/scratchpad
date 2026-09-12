@@ -164,6 +164,12 @@ Scratchpad deletes people's work. Every destructive path must:
 - **New commands** go in `internal/cli/<command>.go` as
   `new<Name>Command(app *App) *cobra.Command`, registered in `root.go`. Keep the
   logic in a method on `App` so it stays testable.
+- **Plumbing commands are hidden.** `shell-init` sets `Hidden`, and cobra's
+  `completion` is hidden via `CompletionOptions.HiddenDefaultCmd`: profiles,
+  installers and goreleaser call them, people do not. They stay fully callable —
+  `sp help shell-init` still works — and `sp --help` lists only what a person
+  would type. Anything else added for a machine to call belongs in the same
+  category, and in `selfSufficient` so it cannot open the wizard.
 - **All output goes through `internal/ui`** so colour and formatting stay
   consistent, and through `app.println` so it can be captured in tests.
 - **Every store operation gets a test** against `t.TempDir()` with an injected
