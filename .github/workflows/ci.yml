@@ -1,22 +1,28 @@
-
 name: CI
 
 on:
+  # Every branch gets the full check run. Tag pushes are ignored: the release
+  # job creates those itself, and re-running on them would loop.
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
 
-# A new push to a branch makes the previous run's answer irrelevant.
+# A new push to a branch makes the previous run's answer irrelevant — except on
+# main, where cancelling could interrupt a release that is already publishing.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# Read-only by default; only the release job widens this.
 permissions:
   contents: read
 
 jobs:
   test:
     name: test (${{ matrix.os }})
+    # Same-repo branches are covered by the push event, so only fork pull
+    # requests need the pull_request one. Without this, every PR runs twice.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -24,9 +30,11 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
@@ -45,12 +53,15 @@ jobs:
 
   lint:
     name: lint
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
@@ -70,18 +81,19 @@ jobs:
           go mod tidy
           git diff --exit-code go.mod go.sum
 
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
         with:
           version: latest
 
       # A release config that only breaks at tag time breaks the release.
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
         with:
           version: "~> v2"
           args: check
 
   build:
     name: cross-compile
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
 
     strategy:
@@ -93,9 +105,11 @@ jobs:
           - { goos: windows, goarch: amd64 }
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
@@ -106,3 +120,69 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: go build -o /dev/null ./cmd/scratchpad
+
+  release:
+    name: release
+    # Only a green main publishes, and only a push to it — never a pull request,
+    # whose code has not been reviewed into main yet.
+    needs: [test, lint, build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    # Releases queue instead of racing: two of them publishing at once would
+    # fight over the same tag, and a cancelled one leaves a half-made release.
+    concurrency:
+      group: release
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # goreleaser builds the changelog from history, and the version comes
+          # from the last tag, neither of which a shallow clone has.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          # Released binaries are built from a cold cache on purpose. A build
+          # cache is a bag of compiled objects keyed by a hash the branch being
+          # built controls; restoring one here would make it an untrusted input
+          # to an artefact people download and run.
+          cache: false
+
+      - name: Decide the version
+        id: version
+        run: |
+          tag="$(./scripts/next-version.sh)"
+          if [ -z "$tag" ]; then
+            echo "nothing to release since the last tag, skipping"
+          else
+            echo "releasing $tag"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Tag the release
+        if: steps.version.outputs.tag != ''
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "refs/tags/$TAG"
+
+      - uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
+        if: steps.version.outputs.tag != ''
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Modules are resolved exactly as committed and checksum-verified; a
+          # release must never silently pull a different dependency graph.
+          GOFLAGS: -mod=readonly
+          GOSUMDB: sum.golang.org

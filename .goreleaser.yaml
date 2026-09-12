@@ -5,7 +5,6 @@ project_name: scratchpad
 
 before:
   hooks:
-    - go mod tidy
     # Completions are generated at release time rather than committed, so they
     # can never drift from the command tree they describe.
     - mkdir -p completions
@@ -44,7 +43,9 @@ checksum:
   name_template: checksums.txt
 
 snapshot:
-  version_template: "{{ incpatch .Version }}-snapshot"
+  # Releases are dated, so a snapshot is today's date rather than a bumped
+  # version: there is no next version to guess at.
+  version_template: '{{ .Now.Format "2006.01.02" }}-snapshot'
 
 changelog:
   use: github
@@ -59,6 +60,10 @@ changelog:
       - Merge branch
 
 release:
+  # The second release of a day is tagged v<date>-1, which semver reads as a
+  # prerelease. `prerelease: auto` would therefore hide it from
+  # /releases/latest, which scripts/install.sh follows to find the version.
+  prerelease: false
   footer: |
     ## Install
 

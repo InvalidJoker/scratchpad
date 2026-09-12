@@ -212,8 +212,10 @@ reading documentation.
 - [x] Build, vet and `go test -race` on Linux, macOS and Windows
 - [x] gofmt check, `go mod tidy` diff check, golangci-lint
 - [x] Cross-compile matrix for linux/darwin/windows on amd64 and arm64
-- [x] Release automation: `.goreleaser.yaml` plus a tag-triggered workflow, and
-      `goreleaser check` in CI so the config cannot rot between releases
+- [x] Release automation: pushing to main tags and publishes a GitHub release
+      once CI is green, versioned by date (`v2026.09.12`, `-1` for the second
+      release of a day)
+- [x] `goreleaser check` in CI so the config cannot rot between releases
 - [x] `scripts/install.sh` — checksum-verified download, completions for every
       shell found, and the `shell-init` block added to the user's profile
 - [ ] Homebrew tap — see Packaging below
