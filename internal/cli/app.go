@@ -1,4 +1,3 @@
-// Package cli assembles Scratchpad's command tree.
 package cli
 
 import (
