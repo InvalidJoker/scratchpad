@@ -64,11 +64,23 @@ committed, so they cannot drift from the command tree. Nothing in the release
 may write to a tracked file: goreleaser refuses to release from a dirty tree,
 which is why `go mod tidy` is a CI check rather than a release hook.
 
-`scripts/install.sh` downloads a release archive, verifies its checksum,
-installs the binary, writes completions for every shell it finds, and appends a
-delimited `shell-init` block to the user's profile. It parses the archive name
-from `archives.name_template`, so changing that template breaks installs of the
-*new* version.
+There are two installers, and both parse the archive name from
+`archives.name_template` — changing that template breaks installs of the *new*
+version. Each downloads an archive, verifies its checksum, installs the binary
+and wires up completions plus the `spo`/`spn` wrappers:
+
+- `scripts/install.sh` (POSIX sh) writes completions into the per-shell
+  auto-loaded directories and appends a delimited block to the login shell's
+  profile.
+- `scripts/install.ps1` (PowerShell 5.1 and 7) has no auto-loaded directory to
+  use, so it writes one `sp.profile.ps1` next to the binary and dot-sources that
+  from `$PROFILE`. Reinstalling refreshes the file without touching the profile
+  again. It also adds the install directory to the user `Path`.
+
+Neither PowerShell script can run on the Linux or macOS runners, so the Windows
+leg of the test matrix is the only place `install.ps1` is parsed and
+`shell-init powershell` is actually executed. Treat that step as the guard it
+is; there is no local substitute unless you have `pwsh` installed.
 
 Manual testing must never touch the real scratch directory. Point the binary at
 a throwaway config:

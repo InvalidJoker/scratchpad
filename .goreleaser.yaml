@@ -11,6 +11,7 @@ before:
     - sh -c 'go run ./cmd/scratchpad completion bash > completions/sp.bash'
     - sh -c 'go run ./cmd/scratchpad completion zsh  > completions/sp.zsh'
     - sh -c 'go run ./cmd/scratchpad completion fish > completions/sp.fish'
+    - sh -c 'go run ./cmd/scratchpad completion powershell > completions/sp.ps1'
 
 builds:
   - id: sp
@@ -37,6 +38,8 @@ archives:
       - goos: windows
         formats: [zip]
     files:
+      # Every archive carries every shell's completions: scripts/install.sh and
+      # install.ps1 read them from here, and so can a packager.
       - completions/sp.*
 
 checksum:
@@ -67,6 +70,14 @@ release:
   footer: |
     ## Install
 
+    Linux and macOS:
+
     ```sh
     curl -fsSL https://raw.githubusercontent.com/InvalidJoker/scratchpad/main/scripts/install.sh | sh
+    ```
+
+    Windows:
+
+    ```powershell
+    irm https://raw.githubusercontent.com/InvalidJoker/scratchpad/main/scripts/install.ps1 | iex
     ```

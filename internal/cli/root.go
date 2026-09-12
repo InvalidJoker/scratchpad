@@ -13,10 +13,11 @@ import (
 // configured, either because they are the setup itself or because a shell is
 // calling them non-interactively.
 var selfSufficient = map[string]bool{
-	"setup":            true,
-	"init":             true,
-	"help":             true,
-	"completion":       true,
+	"setup":      true,
+	"init":       true,
+	"help":       true,
+	"completion": true,
+	"shell-init":       true,
 	"__complete":       true,
 	"__completeNoDesc": true,
 	"bash":             true,

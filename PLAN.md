@@ -188,8 +188,9 @@ The repo already had `completions/` and `scripts/` waiting for this.
       than committed
 - [x] Dynamic completion of project names for `open`/`keep`/`trash`/`info`,
       scoped per command so `restore` only offers trashed projects
-- [x] `sp shell-init` emitting `spo` and `spn`, since a child process cannot
-      change the parent shell's directory
+- [x] `sp shell-init` emitting `spo` and `spn` for bash, zsh, fish and
+      PowerShell, since a child process cannot change the parent shell's
+      directory
 - [x] `scripts/build.sh` stamping `version` via `-ldflags`, plus a `Makefile`
 
 ### 1.10 — Setup wizard ✅
@@ -216,8 +217,9 @@ reading documentation.
       once CI is green, versioned by date (`v2026.09.12`, `-1` for the second
       release of a day)
 - [x] `goreleaser check` in CI so the config cannot rot between releases
-- [x] `scripts/install.sh` — checksum-verified download, completions for every
-      shell found, and the `shell-init` block added to the user's profile
+- [x] `scripts/install.sh` and `scripts/install.ps1` — checksum-verified
+      download, completions for every shell found, and the `shell-init` block
+      added to the user's profile
 - [ ] Homebrew tap — see Packaging below
 
 ---

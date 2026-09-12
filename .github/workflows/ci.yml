@@ -51,6 +51,30 @@ jobs:
       - run: go vet ./...
       - run: go test -race -count=1 ./...
 
+      # install.ps1 and the PowerShell wrappers cannot run on the other
+      # runners, so this is the only place they are ever executed.
+      - name: PowerShell integration
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path scripts/install.ps1), [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+
+          go build -o sp.exe ./cmd/scratchpad
+          .\sp.exe shell-init powershell | Out-String | Invoke-Expression
+          foreach ($fn in 'spo', 'spn') {
+            if (-not (Get-Command $fn -CommandType Function -ErrorAction SilentlyContinue)) {
+              Write-Error "shell-init powershell did not define $fn"
+              exit 1
+            }
+          }
+          .\sp.exe completion powershell | Out-String | Invoke-Expression
+
   lint:
     name: lint
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
