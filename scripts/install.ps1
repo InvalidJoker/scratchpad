@@ -60,7 +60,7 @@ function Get-Arch {
     switch -Regex ($arch) {
         '^(X64|AMD64)$' { return 'amd64' }
         '^ARM64$' { return 'arm64' }
-        default { throw "unsupported architecture $arch: only amd64 and arm64 are published" }
+        default { throw "unsupported architecture ${arch}: only amd64 and arm64 are published" }
     }
 }
 

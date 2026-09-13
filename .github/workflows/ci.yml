@@ -57,11 +57,11 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $errors = $null
+          $parseErrors = $null
           [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path scripts/install.ps1), [ref]$null, [ref]$errors) | Out-Null
-          if ($errors) {
-            $errors | ForEach-Object { Write-Error $_.Message }
+            (Resolve-Path scripts/install.ps1), [ref]$null, [ref]$parseErrors) | Out-Null
+          if ($parseErrors) {
+            $parseErrors | ForEach-Object { Write-Error "install.ps1 parse error at $($_.Extent.StartLineNumber): $($_.Message)" }
             exit 1
           }
 
