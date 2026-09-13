@@ -43,10 +43,14 @@ func NewRootCommand(version string) *cobra.Command {
 		Short: "A lifecycle manager for projects you're not sure deserve to be real yet",
 		Long: "Scratchpad makes experimentation cheap.\n\n" +
 			"Start something without deciding whether it matters, then keep it,\n" +
-			"archive it, or throw it away once you know.",
+			"archive it, or throw it away once you know.\n\n" +
+			"Run `sp` on its own to open the dashboard.",
 		Version:      version,
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return app.runDashboard(cmd.Context())
+		},
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := config.Load(configPath)
 			if err != nil {

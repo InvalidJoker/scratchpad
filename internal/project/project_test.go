@@ -71,13 +71,17 @@ func TestRecordActivityOnlyMovesForward(t *testing.T) {
 	now := time.Now()
 	p := project.Project{LastOpened: now}
 
-	p.RecordActivity(now.Add(-time.Hour))
+	if p.RecordActivity(now.Add(-time.Hour)) {
+		t.Error("an older signal reported a move, want false")
+	}
 	if !p.LastOpened.Equal(now) {
 		t.Errorf("an older signal moved LastOpened backwards to %v", p.LastOpened)
 	}
 
 	later := now.Add(time.Hour)
-	p.RecordActivity(later)
+	if !p.RecordActivity(later) {
+		t.Error("a newer signal reported no move, want true")
+	}
 	if !p.LastOpened.Equal(later) {
 		t.Errorf("LastOpened = %v, want %v", p.LastOpened, later)
 	}

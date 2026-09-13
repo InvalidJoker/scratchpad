@@ -49,6 +49,34 @@ func (s *Store) Keep(p *project.Project, dest string) error {
 	return s.saveOrUnwind(p, origin, target)
 }
 
+// Rename changes a project's directory name in place. The directory name is
+// what LoadDir treats as authoritative, so renaming the directory is the only
+// way to rename a project — the metadata follows it rather than the reverse.
+func (s *Store) Rename(p *project.Project, name string) error {
+	if err := project.ValidateName(name); err != nil {
+		return err
+	}
+	if name == p.Name {
+		return nil
+	}
+	if p.Dir() == "" {
+		return fmt.Errorf("project %q has no directory", p.Name)
+	}
+
+	origin := p.Dir()
+	target := filepath.Join(filepath.Dir(origin), name)
+	if err := s.relocate(p, target); err != nil {
+		return err
+	}
+	p.Name = name
+	// A trashed project remembers where it came from; the restore path has to
+	// bring it back under its new name, not the old one.
+	if p.OriginalPath != "" {
+		p.OriginalPath = filepath.Join(filepath.Dir(p.OriginalPath), name)
+	}
+	return s.saveOrUnwind(p, origin, target)
+}
+
 // Trash moves a project into the recovery area. Deletion is never immediate:
 // see Destroy for the path that actually removes bytes.
 func (s *Store) Trash(p *project.Project) error {

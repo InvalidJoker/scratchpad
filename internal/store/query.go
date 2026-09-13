@@ -43,13 +43,19 @@ func (s *Store) StatusOf(p *project.Project) project.Status {
 
 // Query returns the projects matching f, sorted.
 func (s *Store) Query(f Filter) ([]*project.Project, error) {
-	locs := f.Locations
+	all, err := s.Collect(f.Locations)
+	if err != nil {
+		return nil, err
+	}
+	return s.Match(all, f), nil
+}
+
+// Collect loads every managed project in the given locations, unfiltered. Empty
+// locations means the scratch directory alone.
+func (s *Store) Collect(locs []Location) ([]*project.Project, error) {
 	if len(locs) == 0 {
 		locs = []Location{Scratch}
 	}
-
-	now := s.now()
-	staleAfter := s.cfg.StaleAfter.Duration()
 
 	var out []*project.Project
 	seen := map[string]bool{}
@@ -65,9 +71,26 @@ func (s *Store) Query(f Filter) ([]*project.Project, error) {
 				continue
 			}
 			seen[p.Dir()] = true
-			if matches(p, f, now, staleAfter) {
-				out = append(out, p)
-			}
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+// Match filters and sorts projects already in hand.
+//
+// It is separate from Query so that a caller which has folded filesystem and
+// git activity into the projects first can filter on the refreshed values.
+// Selecting on staleness with metadata the scan has already contradicted would
+// be exactly the lie this layer exists to stop telling.
+func (s *Store) Match(ps []*project.Project, f Filter) []*project.Project {
+	now := s.now()
+	staleAfter := s.cfg.StaleAfter.Duration()
+
+	out := make([]*project.Project, 0, len(ps))
+	for _, p := range ps {
+		if matches(p, f, now, staleAfter) {
+			out = append(out, p)
 		}
 	}
 
@@ -77,7 +100,7 @@ func (s *Store) Query(f Filter) ([]*project.Project, error) {
 			out[i], out[j] = out[j], out[i]
 		}
 	}
-	return out, nil
+	return out
 }
 
 func matches(p *project.Project, f Filter, now time.Time, staleAfter time.Duration) bool {

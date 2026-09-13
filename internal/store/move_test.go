@@ -338,3 +338,88 @@ func TestMovePreservesSymlinksAndModTimes(t *testing.T) {
 		t.Errorf("mtime = %v, want %v preserved through the copy", copied.ModTime(), stamp)
 	}
 }
+
+func TestRenameMovesTheDirectory(t *testing.T) {
+	now := time.Date(2026, 9, 11, 9, 0, 0, 0, time.UTC)
+	s := testStore(t, now)
+
+	p, err := s.Create(store.CreateOptions{Name: "mistyped"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(p.Dir(), "keep.txt"), []byte("content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Rename(p, "good-name"); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+
+	if got, want := p.Dir(), s.PathFor(store.Scratch, "good-name"); got != want {
+		t.Errorf("Dir = %q, want %q", got, want)
+	}
+	if got := readFile(t, p.Dir(), "keep.txt"); got != "content" {
+		t.Errorf("content = %q, want it carried across the rename", got)
+	}
+	if _, err := os.Stat(s.PathFor(store.Scratch, "mistyped")); !os.IsNotExist(err) {
+		t.Error("the old directory is still there, want it gone")
+	}
+
+	// The directory name is authoritative, so a reload must agree.
+	loaded, err := s.Get("good-name")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if loaded.Name != "good-name" {
+		t.Errorf("Name = %q, want %q", loaded.Name, "good-name")
+	}
+}
+
+func TestRenameRefusesBadAndOccupiedNames(t *testing.T) {
+	now := time.Date(2026, 9, 11, 9, 0, 0, 0, time.UTC)
+	s := testStore(t, now)
+
+	p, err := s.Create(store.CreateOptions{Name: "first"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Create(store.CreateOptions{Name: "second"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Rename(p, "not a name"); err == nil {
+		t.Error("Rename accepted an invalid name, want an error")
+	}
+	if err := s.Rename(p, "second"); !errors.Is(err, store.ErrOccupied) {
+		t.Errorf("Rename onto an existing project = %v, want ErrOccupied", err)
+	}
+	// Both refusals must leave the project exactly where it was.
+	if got, want := p.Dir(), s.PathFor(store.Scratch, "first"); got != want {
+		t.Errorf("Dir = %q, want %q", got, want)
+	}
+}
+
+func TestRenameRepointsTheRestorePath(t *testing.T) {
+	now := time.Date(2026, 9, 11, 9, 0, 0, 0, time.UTC)
+	s := testStore(t, now)
+
+	p, err := s.Create(store.CreateOptions{Name: "binned"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Trash(p); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Rename(p, "renamed-in-trash"); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	if err := s.Restore(p); err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+
+	// Restoring must bring the project back under the name it now has, not
+	// resurrect the one it was trashed under.
+	if got, want := p.Dir(), s.PathFor(store.Scratch, "renamed-in-trash"); got != want {
+		t.Errorf("Dir = %q, want %q", got, want)
+	}
+}

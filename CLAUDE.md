@@ -97,17 +97,22 @@ SCRATCHPAD_CONFIG=$T/config.toml /tmp/sp new demo
 
 ## Architecture
 
-Dependencies point one way: `cli` → `store` → `project` → `config`. Nothing
-below `cli` knows about cobra, and nothing outside `ui` formats for a terminal.
+Dependencies point one way: `cli` → `store` → `project` → `config`, with
+`cli` → `activity` → `gitx` alongside it. Nothing below `cli` knows about
+cobra, and nothing outside `ui` and `tui` formats for a terminal — `tui` draws
+the screen, but every colour and every human-readable string it uses comes from
+`ui`, so the two cannot drift apart.
 
 | Package | Responsibility |
 | --- | --- |
 | `internal/config` | `config.toml`, `~` expansion, `30d`/`2w`/`never` durations |
 | `internal/project` | the `Project` model and lifecycle rules |
 | `internal/store` | all persistence and directory moves |
+| `internal/activity` | filesystem and git signals, and the scan cache |
 | `internal/gitx` | git subprocess wrapper |
 | `internal/scaffold` | starter files for new projects |
 | `internal/ui` | lipgloss styles and human-readable formatting |
+| `internal/tui` | the bubbletea dashboard `sp` opens with no arguments |
 | `internal/cli` | cobra command tree |
 | `cmd/scratchpad` | `main`, wired through fang |
 
@@ -123,7 +128,25 @@ These are load-bearing. Breaking one breaks the product, not just a test.
   `active | kept | archived | trashed`. `stale` and `expired` are computed at
   read time by `project.Status(now, staleAfter)` — never store them.
 - **Activity flows through `RecordActivity`.** Filesystem and git signals move
-  the activity floor forward; they never move it backwards.
+  the activity floor forward; they never move it backwards. It reports whether
+  it moved, and callers persist only when it did — `sp list` must not rewrite
+  every metadata file it reads.
+- **Scan before you filter.** `--stale` and `--older-than` are questions only
+  `activity` can answer, so `store.Query` is split into `Collect` (load) and
+  `Match` (filter and sort). `App.scanned` runs them in that order with the
+  scan in between. Filtering on unrefreshed metadata is the lie 2.1 exists to
+  stop telling.
+- **`activity` never walks a big tree on the listing path.** Trees under
+  ~1000 files are rescanned every time, because walking them is cheaper than
+  being wrong. Bigger ones answer from `.scratchpad/activity.json`, invalidated
+  by a one-`ReadDir` probe of the project root and its direct entries, with a
+  15 minute backstop. Anything added to `noiseDirs` must stay out of both the
+  signal and the probe: `.scratchpad` is in there because the cache lives in
+  it, and a probe that watched it would invalidate itself on every run.
+- **Size counts what a delete frees; activity does not.** Dependency
+  directories are excluded from the mtime signal — an `npm install` is not
+  work — but their bytes are counted, and tallied separately in
+  `Signals.Deps`. Scratchpad's own `.scratchpad` is counted by neither.
 - **Writes are atomic.** Metadata goes to a temp file then `os.Rename`. A failed
   `Create` removes the directory it made.
 
@@ -176,12 +199,25 @@ Scratchpad deletes people's work. Every destructive path must:
   clock via `store.SetClock`.
 - **Interactive code paths must be gated**, never assumed. `app.interactive()`
   decides; a command that cannot ask refuses rather than guessing.
+  `app.hasTerminal()` is the stricter version the dashboard needs, since a
+  full-screen UI also needs somewhere to draw.
+- **In the TUI, every key that changes a project is a capital letter.** It
+  leaves the lowercase alphabet for navigation, and it means no single relaxed
+  keystroke can move or bin a directory. The view renders a fixed number of
+  lines in every mode; a frame that shrinks leaves the difference on screen,
+  and the leftovers read as real content. `TestFrameIsAlwaysTheSameShape`
+  guards that.
+- **A confirmation waits for its facts.** `D` does not open its modal until
+  `gitx.Read` has answered, because a question that defaults to "yes" only
+  because the status has not loaded is consent nobody gave.
 
 ## Dependencies
 
-cobra (commands), fang (CLI presentation), lipgloss v2 (styles), BurntSushi/toml
-(config). fang pulls `charm.land/lipgloss/v2` — use that import path, not
-`github.com/charmbracelet/lipgloss` v1. The two are not compatible.
+cobra (commands), fang (CLI presentation), lipgloss v2 (styles), bubbletea v2 +
+bubbles v2 (the dashboard), BurntSushi/toml (config). lipgloss v2 is
+`charm.land/lipgloss/v2` — use that import path, not
+`github.com/charmbracelet/lipgloss` v1. The two are not compatible. Bubbletea
+and bubbles v2 live under `charm.land/` too.
 
 huh (prompts and the setup wizard) renders with **lipgloss v1**, while fang
 renders with **lipgloss v2**. Both are in the build on purpose and must stay
@@ -195,7 +231,10 @@ incompatible and a conversion layer costs more than eight repeated hex values.
 
 `github.com/charmbracelet/x/cellbuf` is pinned forward to **v0.0.15**. Do not
 let it drift back: lipgloss v1 pulls an older cellbuf that does not compile
-against the `x/ansi` v0.11.0 required by lipgloss v2, and the build breaks with
-errors inside cellbuf itself.
+against the `x/ansi` required by lipgloss v2, and the build breaks with errors
+inside cellbuf itself.
 
-Planned: bubbletea for the TUI (Milestone 2).
+Note that huh therefore drags bubbletea **v1** into the build as an indirect
+dependency, next to the v2 the dashboard uses. That is expected. The rule is
+the same as for lipgloss: `internal/tui` is v2 only, and nothing outside huh's
+own forms may reach for v1.

@@ -39,6 +39,7 @@ runs (scripts, CI) silently use defaults instead of prompting.
 ## Usage
 
 ```sh
+sp                                    # open the dashboard
 sp new weather-app                    # create a scratch project
 sp new api-test --ttl 7d --tag exp    # custom expiry and a tag
 sp list                               # see what's active, stale, expired
@@ -51,6 +52,7 @@ sp clean                              # interactive review of stale/expired proj
 
 | Command | What it does |
 | --- | --- |
+| `sp` | Open the dashboard; prints the listing when there is no terminal |
 | `sp new <name>` | Create a scratch project (README + git init by default) |
 | `sp list` | List projects, filterable by status/tag/age, `--json` for scripting |
 | `sp open <name>` | Launch the project in `$EDITOR`/`$VISUAL`/configured editor |
@@ -64,6 +66,27 @@ sp clean                              # interactive review of stale/expired proj
 
 Run `sp help <command>` for full flags and examples.
 
+## The dashboard
+
+Running `sp` with no arguments opens a full-screen view of your scratch
+directory: the listing on the left, everything known about the selected
+project on the right.
+
+| Key | Action |
+| --- | --- |
+| `↑`/`↓`, `j`/`k`, `g`/`G` | Move around |
+| `Enter` | Open in your editor |
+| `N` | New project |
+| `K` | Keep it — promote out of scratch |
+| `D` | Trash it, after the same safety report `sp trash` gives |
+| `R` | Rename it |
+| `s` or `/` | Search name, description, note and tags |
+| `?` | Every key |
+| `q` | Quit |
+
+Anything that moves or deletes a project is on a capital letter, so no single
+relaxed keystroke can do it. Piping (`sp | less`) prints the listing instead.
+
 ## How it decides "stale" and "expired"
 
 Every project gets a default expiry (`sp config set default_expiration 30d`,
@@ -71,6 +94,13 @@ or `never`); override it per project with `sp new --ttl 7d`. Once a project
 has had no activity for longer than `stale_after`, it's **stale**; once past
 its expiry, it's **expired**. Neither state deletes anything on its own —
 `sp clean` is always the one that acts, and only after you review it.
+
+Activity is read from the project itself, not just from Scratchpad's own
+records: the newest modification time in the tree and the last commit both
+count, so a project you edited in your editor without ever running `sp` does
+not drift toward stale. Dependency directories (`node_modules`, `target`,
+`dist`, `venv`) are ignored for that — installing packages is not working on a
+project — but they are still counted in the size a delete would reclaim.
 
 ## Safety
 

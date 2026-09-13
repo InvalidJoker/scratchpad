@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/InvalidJoker/scratchpad/internal/activity"
 	"github.com/InvalidJoker/scratchpad/internal/gitx"
 	"github.com/InvalidJoker/scratchpad/internal/project"
 	"github.com/InvalidJoker/scratchpad/internal/store"
@@ -36,8 +37,11 @@ func (a *App) runInfo(ctx context.Context, name string, asJSON bool) error {
 	if err != nil {
 		return err
 	}
+
+	one := []*project.Project{p}
+	signals := a.refreshActivity(ctx, one, false)
 	if asJSON {
-		return a.printJSON([]*project.Project{p})
+		return a.printJSON(one, signals)
 	}
 
 	now := a.store.Now()
@@ -53,6 +57,7 @@ func (a *App) runInfo(ctx context.Context, name string, asJSON bool) error {
 		p.Created.Format("Jan 2, 2006"), ui.Muted.Render("("+ui.RelativeTime(p.Created, now)+")"))))
 	a.println(ui.Field("Last used", ui.RelativeTime(p.LastActivity(), now)))
 	a.println(ui.Field("Opened", plural(p.OpenCount, "time")))
+	a.println(ui.Field("Size", sizeLine(signals[p.Dir()])))
 
 	switch {
 	case p.State == project.StateTrashed:
@@ -82,6 +87,16 @@ func (a *App) runInfo(ctx context.Context, name string, asJSON bool) error {
 	}
 	a.println("")
 	return nil
+}
+
+// sizeLine reports the total, and separately the part of it a build tool could
+// recreate — that is the number worth acting on before deleting anything.
+func sizeLine(sig activity.Signals) string {
+	line := ui.Bytes(sig.Size)
+	if sig.Deps > 0 {
+		line += ui.Muted.Render(fmt.Sprintf(" (%s in dependencies)", ui.Bytes(sig.Deps)))
+	}
+	return line
 }
 
 func (a *App) printGitBlock(status *gitx.Status) {

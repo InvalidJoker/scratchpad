@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/InvalidJoker/scratchpad/internal/activity"
 	"github.com/InvalidJoker/scratchpad/internal/config"
 	"github.com/InvalidJoker/scratchpad/internal/gitx"
 	"github.com/InvalidJoker/scratchpad/internal/project"
@@ -111,10 +112,20 @@ func (a *App) cleanCandidates(ctx context.Context, opts cleanOptions) ([]candida
 		filter.IdleFor = idle
 	}
 
-	projects, err := a.store.Query(filter)
+	projects, _, err := a.scanned(ctx, filter, false)
 	if err != nil {
 		return nil, err
 	}
+
+	// The sizes about to be printed are the promise `sp clean` makes about the
+	// space it frees, so they are measured now rather than read from a cache
+	// that may be an hour old. Only the candidates are re-walked, not every
+	// project in scratch.
+	dirs := make([]string, 0, len(projects))
+	for _, p := range projects {
+		dirs = append(dirs, p.Dir())
+	}
+	signals := activity.Collect(ctx, dirs, true)
 
 	candidates := make([]candidate, 0, len(projects))
 	for _, p := range projects {
@@ -126,7 +137,7 @@ func (a *App) cleanCandidates(ctx context.Context, opts cleanOptions) ([]candida
 			project: p,
 			status:  a.store.StatusOf(p),
 			git:     status,
-			size:    store.DirSize(p.Dir()),
+			size:    signals[p.Dir()].Size,
 		})
 	}
 	return candidates, nil

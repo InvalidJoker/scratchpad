@@ -22,9 +22,9 @@ func newRestoreCommand(app *App) *cobra.Command {
 		Args:              cobra.MaximumNArgs(1),
 		Example:           "  sp restore old-website\n  sp restore --list",
 		ValidArgsFunction: app.completeProjects(store.Trash),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if list || len(args) == 0 {
-				return app.runList(listOptions{trashed: true, sortKey: "used"})
+				return app.runList(cmd.Context(), listOptions{trashed: true, sortKey: "used"})
 			}
 			return app.runRestore(args[0])
 		},

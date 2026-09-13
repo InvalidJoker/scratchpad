@@ -128,12 +128,16 @@ func (p *Project) LastActivity() time.Time {
 	return t
 }
 
-// RecordActivity moves the activity floor forward if ts is more recent. It is
-// how filesystem and git signals feed into staleness.
-func (p *Project) RecordActivity(ts time.Time) {
+// RecordActivity moves the activity floor forward if ts is more recent, and
+// reports whether it moved. It is how filesystem and git signals feed into
+// staleness; the return value exists so a read path such as `sp list` writes
+// metadata only when it has something new to say.
+func (p *Project) RecordActivity(ts time.Time) bool {
 	if ts.After(p.LastOpened) {
 		p.LastOpened = ts
+		return true
 	}
+	return false
 }
 
 func (p *Project) IsExpired(now time.Time) bool {

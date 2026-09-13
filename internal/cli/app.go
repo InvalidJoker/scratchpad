@@ -30,6 +30,13 @@ func (a *App) interactive() bool {
 	return ok && term.IsTerminal(f.Fd())
 }
 
+// hasTerminal reports whether both ends are a terminal. The dashboard needs
+// that much: a prompt needs somewhere to read from, a full-screen UI also needs
+// somewhere to draw.
+func (a *App) hasTerminal() bool {
+	return a.interactive() && term.IsTerminal(os.Stdout.Fd())
+}
+
 // stdio returns the streams to hand to a child process such as an editor.
 func (a *App) stdio() (io.Reader, io.Writer, io.Writer) {
 	return os.Stdin, os.Stdout, os.Stderr

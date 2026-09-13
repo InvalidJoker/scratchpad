@@ -22,6 +22,8 @@ var (
 	colorOK     = compat.AdaptiveColor{Light: lipgloss.Color("#047857"), Dark: lipgloss.Color("#34D399")}
 	colorWarn   = compat.AdaptiveColor{Light: lipgloss.Color("#B45309"), Dark: lipgloss.Color("#FBBF24")}
 	colorErr    = compat.AdaptiveColor{Light: lipgloss.Color("#B91C1C"), Dark: lipgloss.Color("#F87171")}
+	colorLine   = compat.AdaptiveColor{Light: lipgloss.Color("#D1D5DB"), Dark: lipgloss.Color("#374151")}
+	colorOnSel  = compat.AdaptiveColor{Light: lipgloss.Color("#FFFFFF"), Dark: lipgloss.Color("#0B0B12")}
 )
 
 var (
@@ -33,6 +35,24 @@ var (
 	Bold    = lipgloss.NewStyle().Bold(true)
 	Label   = lipgloss.NewStyle().Foreground(colorMuted).Width(12)
 	Header  = lipgloss.NewStyle().Foreground(colorMuted).Bold(true)
+)
+
+// Styles the dashboard needs. They live here, with everything else that puts
+// colour on a terminal, so the TUI cannot drift into a palette of its own.
+var (
+	Title = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
+	// Selected marks the row under the cursor. It sets a background, so
+	// callers give it a Width to paint the whole row.
+	Selected = lipgloss.NewStyle().Foreground(colorOnSel).Background(colorAccent).Bold(true)
+	// Rule draws the separators between panes.
+	Rule = lipgloss.NewStyle().Foreground(colorLine)
+	// Panel frames a modal: a bordered box that takes over the body.
+	Panel = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorAccent).
+		Padding(1, 2)
+	// Alarm frames a modal for something destructive.
+	Alarm = Panel.BorderForeground(colorErr)
 )
 
 // Check renders a success line, e.g. "✓ Created weather-app".

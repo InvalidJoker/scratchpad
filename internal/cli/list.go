@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/InvalidJoker/scratchpad/internal/activity"
 	"github.com/InvalidJoker/scratchpad/internal/config"
 	"github.com/InvalidJoker/scratchpad/internal/project"
 	"github.com/InvalidJoker/scratchpad/internal/store"
@@ -43,9 +46,10 @@ func newListCommand(app *App) *cobra.Command {
 		Example: "  sp list\n" +
 			"  sp list --stale --older-than 30d\n" +
 			"  sp list --tag experiment --sort name\n" +
+			"  sp list --sort size\n" +
 			"  sp list -q | xargs -n1 sp info",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return app.runList(opts)
+			return app.runList(cmd.Context(), opts)
 		},
 	}
 
@@ -59,7 +63,7 @@ func newListCommand(app *App) *cobra.Command {
 	f.StringVarP(&opts.tag, "tag", "t", "", "only projects with this tag")
 	f.StringVar(&opts.query, "query", "", "match name, description, note or tags")
 	f.StringVar(&opts.olderThan, "older-than", "", "only projects untouched for longer than this, e.g. 30d")
-	f.StringVar(&opts.sortKey, "sort", "used", "sort by used, name or age")
+	f.StringVar(&opts.sortKey, "sort", "used", "sort by used, name, age or size")
 	f.BoolVar(&opts.reverse, "reverse", false, "reverse the sort order")
 	f.BoolVar(&opts.asJSON, "json", false, "output JSON")
 	f.BoolVarP(&opts.quiet, "quiet", "q", false, "print names only, one per line")
@@ -67,20 +71,23 @@ func newListCommand(app *App) *cobra.Command {
 	return cmd
 }
 
-func (a *App) runList(opts listOptions) error {
+func (a *App) runList(ctx context.Context, opts listOptions) error {
 	filter, err := opts.filter()
 	if err != nil {
 		return err
 	}
 
-	projects, err := a.store.Query(filter)
+	projects, signals, err := a.scanned(ctx, filter, false)
 	if err != nil {
 		return err
+	}
+	if opts.sortKey == sortSize {
+		sortBySize(projects, signals, opts.reverse)
 	}
 
 	switch {
 	case opts.asJSON:
-		return a.printJSON(projects)
+		return a.printJSON(projects, signals)
 	case opts.quiet:
 		for _, p := range projects {
 			a.println(p.Name)
@@ -92,8 +99,31 @@ func (a *App) runList(opts listOptions) error {
 		a.printEmptyState(opts)
 		return nil
 	}
-	a.printTable(projects)
+	a.printTable(projects, signals)
 	return nil
+}
+
+// sortSize is handled here rather than in store.Filter because the sizes come
+// from the activity scan, and the store does not walk trees.
+const sortSize = "size"
+
+// defaultSort is what every listing falls back to, including the one the
+// dashboard prints when there is no terminal.
+const defaultSort = store.SortActivity
+
+func sortBySize(ps []*project.Project, signals map[string]activity.Signals, reverse bool) {
+	sort.SliceStable(ps, func(i, j int) bool {
+		a, b := signals[ps[i].Dir()].Size, signals[ps[j].Dir()].Size
+		if a == b {
+			return ps[i].Name < ps[j].Name
+		}
+		// Biggest first: the question behind sorting by size is always which
+		// projects are worth reclaiming.
+		if reverse {
+			return a < b
+		}
+		return a > b
+	})
 }
 
 // filter translates the flags into a store.Filter, resolving which locations
@@ -104,8 +134,13 @@ func (o listOptions) filter() (store.Filter, error) {
 	switch store.SortKey(o.sortKey) {
 	case store.SortActivity, store.SortName, store.SortAge:
 		f.Sort = store.SortKey(o.sortKey)
+	case sortSize:
+		// The store cannot order by size, so it returns activity order and
+		// runList re-sorts once the scan has the numbers. Reversing is left to
+		// that pass too, or it would be applied twice.
+		f.Sort, f.Reverse = store.SortActivity, false
 	default:
-		return f, fmt.Errorf("unknown sort %q: use used, name or age", o.sortKey)
+		return f, fmt.Errorf("unknown sort %q: use used, name, age or size", o.sortKey)
 	}
 
 	if o.olderThan != "" {
@@ -153,15 +188,16 @@ func (o listOptions) filter() (store.Filter, error) {
 	return f, nil
 }
 
-func (a *App) printTable(projects []*project.Project) {
+func (a *App) printTable(projects []*project.Project, signals map[string]activity.Signals) {
 	now := a.store.Now()
 
-	table := ui.NewTable("name", "last used", "age", "status")
+	table := ui.NewTable("name", "last used", "age", "size", "status")
 	for _, p := range projects {
 		table.Row(
 			ui.Bold.Render(p.Name),
 			ui.RelativeTime(p.LastActivity(), now),
 			ui.Duration(p.Age(now)),
+			ui.Bytes(signals[p.Dir()].Size),
 			ui.StatusBadge(a.store.StatusOf(p)),
 		)
 	}
@@ -220,9 +256,13 @@ type jsonProject struct {
 	AgeDays     int        `json:"age_days"`
 	IdleDays    int        `json:"idle_days"`
 	OpenCount   int        `json:"open_count"`
+	// SizeBytes counts everything the project occupies, dependency directories
+	// included; DepsBytes is the part of it a build could recreate.
+	SizeBytes int64 `json:"size_bytes"`
+	DepsBytes int64 `json:"deps_bytes"`
 }
 
-func (a *App) printJSON(projects []*project.Project) error {
+func (a *App) printJSON(projects []*project.Project, signals map[string]activity.Signals) error {
 	now := a.store.Now()
 	out := make([]jsonProject, 0, len(projects))
 	for _, p := range projects {
@@ -238,6 +278,8 @@ func (a *App) printJSON(projects []*project.Project) error {
 			AgeDays:     int(p.Age(now).Hours() / 24),
 			IdleDays:    int(p.Idle(now).Hours() / 24),
 			OpenCount:   p.OpenCount,
+			SizeBytes:   signals[p.Dir()].Size,
+			DepsBytes:   signals[p.Dir()].Deps,
 		}
 		if !p.ExpiresAt.IsZero() {
 			expires := p.ExpiresAt

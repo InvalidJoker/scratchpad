@@ -12,6 +12,12 @@ func StatusBadge(s project.Status) string {
 	return s.Icon() + " " + statusStyle(s).Render(title(string(s)))
 }
 
+// StatusLabel is the badge without the colour, for a caller that paints the
+// whole line it sits in — a selected row cannot host a nested style.
+func StatusLabel(s project.Status) string {
+	return s.Icon() + " " + title(string(s))
+}
+
 func statusStyle(s project.Status) lipgloss.Style {
 	switch s {
 	case project.StatusActive:
